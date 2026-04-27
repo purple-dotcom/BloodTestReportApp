@@ -73,13 +73,12 @@ def parse_text(text):
         # skip if name matches noise
         if skip_regex.match(name):
             continue
-
         report_readings[name] = value
 
     return patient_info, report_readings
 
-output = parse_text(txt)
-print(output)
+readings = parse_text(txt) #returns 2 dictionaries
+# print(output)
 
 fallback = {
     "Total RBC count": "RBC",
@@ -105,4 +104,4 @@ def get_short_name(readings):
         cleaned[short] = value
     return cleaned
 
-print(get_short_name(output[1]))
+print(get_short_name(readings[1])) #pass the 2nd dictionary (report_readings)
