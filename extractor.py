@@ -80,3 +80,29 @@ def parse_text(text):
 
 output = parse_text(txt)
 print(output)
+
+fallback = {
+    "Total RBC count": "RBC",
+    "Total WBC count": "WBC",
+    "Neutrophils": "NEUT",
+    "Lymphocytes": "LYMPH",
+    "Eosinophils": "EOS",
+    "Monocytes": "MONO",
+    "Basophils": "BASO",
+    "Platelet Count": "PLT"
+}
+
+def get_short_name(readings):
+    cleaned = {}
+    for name, value in readings.items():
+        match = re.search(r"\((\w+)\)", name)
+        if match:
+            short = match.group(1)
+        elif name in fallback:
+            short = fallback[name]
+        else:
+            short = name
+        cleaned[short] = value
+    return cleaned
+
+print(get_short_name(output[1]))
