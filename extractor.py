@@ -91,7 +91,7 @@ fallback = {
     "Platelet Count": "PLT"
 }
 
-def get_short_name(readings):
+def get_short_name_values(readings):
     cleaned = {}
     for name, value in readings.items():
         match = re.search(r"\((\w+)\)", name)
@@ -104,4 +104,4 @@ def get_short_name(readings):
         cleaned[short] = value
     return cleaned
 
-#print(get_short_name(readings[1])) #pass the 2nd dictionary (report_readings)
+#print(get_short_name_values(readings[1])) #pass the 2nd dictionary (report_readings)

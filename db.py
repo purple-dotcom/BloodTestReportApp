@@ -30,11 +30,20 @@ def get_user_by_email(email):
     con.close()
     return result
 
+def get_user_by_id(user_id):
+    con = get_connection()
+    cursor = con.cursor()
+    cursor.execute('SELECT id, name, email FROM users WHERE id = %s', (user_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    con.close()
+    return result
+
 #--REPORT--#
 def create_report(user_id, name, age, sex, lab_name, report_date):
     con = get_connection()
     cursor = con.cursor()
-    cursor.execute("INSERT INTO reports (patient_name, patient_age, patient_sex, lab_name, report_date) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id", (user_id, name, age, sex, lab_name, report_date))
+    cursor.execute("INSERT INTO reports (user_id, patient_name, patient_age, patient_sex, lab_name, report_date) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id", (user_id, name, age, sex, lab_name, report_date))
     report_id = cursor.fetchone()[0]
     con.commit()
     cursor.close()
@@ -53,7 +62,7 @@ def get_reports_by_user(user_id):
 def delete_report(report_id):
     con = get_connection()
     cursor = con.cursor()
-    cursor.execute("DELETE FROM reports where report_id = %s", (report_id,))
+    cursor.execute("DELETE FROM reports where id = %s", (report_id,))
     con.commit()
     cursor.close()
     con.close()
@@ -88,9 +97,36 @@ def get_results_by_report(report_id):
         FROM results r
         JOIN parameters p 
         ON r.parameter_id = p.parameter_id
-        WHERE r.report_id = %s'''
-    ), ((report_id))
+        WHERE r.report_id = %s''',
+        (report_id,))
     result = cursor.fetchall()
     cursor.close()
     con.close()
     return result
+
+#TESTING
+if __name__ == '__main__':
+    user_id = create_user("Test", "test6@gmail.com", "password123")
+    print(f"Created User : {user_id}")
+
+    user = get_user_by_email("test6@gmail.com")
+    print("Fetched user:", user)
+
+    user = get_user_by_id(user_id)
+    print("Fetched by id:", user)
+
+    report_id = create_report(user_id, "Test", 25, "Male", "Test Lab", "2011-11-11")
+    print(f"Created report : {report_id}")
+
+    reports = get_reports_by_user(user_id)
+    print(f"Reports fetched : {reports}")
+
+    param_id = get_parameter_id("Hb")
+    print("Parameter id:", param_id)
+
+    dummy = {
+        "Hb": {"value": 12.5, "status": "Red"},
+        "RBC": {"value": 5.2, "status": "Green"}
+    }
+    save_results(report_id, dummy)
+    print("Results saved")

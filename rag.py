@@ -1,5 +1,5 @@
 import re
-from extractor import check_n_extract, parse_text, get_short_name
+from extractor import check_n_extract, parse_text, get_short_name_values
 
 ranges = {
     "Hb":  {"male": (13.0, 17.0), "female": (12.0, 16.0)},
@@ -44,6 +44,6 @@ def get_rag_status(readings, sex):
 loc = r"C:\Users\DELL\Downloads\CBC-test-report-format-example-sample-template-Drlogy-lab-report.pdf"
 text = check_n_extract(loc)
 patient_info, raw_readings = parse_text(text)
-cleaned_readings = get_short_name(raw_readings)
+cleaned_readings = get_short_name_values(raw_readings)
 
 print(get_rag_status(cleaned_readings, patient_info["sex"]))
