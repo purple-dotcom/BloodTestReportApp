@@ -96,7 +96,7 @@ def get_results_by_report(report_id):
         '''SELECT p.name, p.short_name, p.unit, r.value, r.rag_status
         FROM results r
         JOIN parameters p 
-        ON r.parameter_id = p.parameter_id
+        ON r.parameter_id = p.id
         WHERE r.report_id = %s''',
         (report_id,))
     result = cursor.fetchall()
@@ -105,28 +105,34 @@ def get_results_by_report(report_id):
     return result
 
 #TESTING
-if __name__ == '__main__':
-    user_id = create_user("Test", "test6@gmail.com", "password123")
-    print(f"Created User : {user_id}")
+# if __name__ == '__main__':
+#     user_id = create_user("Test", "test69@gmail.com", "password123")
+#     print(f"Created User : {user_id}")
 
-    user = get_user_by_email("test6@gmail.com")
-    print("Fetched user:", user)
+#     user = get_user_by_email("test69@gmail.com")
+#     print("Fetched user:", user)
 
-    user = get_user_by_id(user_id)
-    print("Fetched by id:", user)
+#     user = get_user_by_id(user_id)
+#     print("Fetched by id:", user)
 
-    report_id = create_report(user_id, "Test", 25, "Male", "Test Lab", "2011-11-11")
-    print(f"Created report : {report_id}")
+#     report_id = create_report(user_id, "Test", 25, "Male", "Test Lab", "2011-11-11")
+#     print(f"Created report : {report_id}")
 
-    reports = get_reports_by_user(user_id)
-    print(f"Reports fetched : {reports}")
+#     reports = get_reports_by_user(user_id)
+#     print(f"Reports fetched : {reports}")
 
-    param_id = get_parameter_id("Hb")
-    print("Parameter id:", param_id)
+#     param_id = get_parameter_id("Hb")
+#     print("Parameter id:", param_id)
 
-    dummy = {
-        "Hb": {"value": 12.5, "status": "Red"},
-        "RBC": {"value": 5.2, "status": "Green"}
-    }
-    save_results(report_id, dummy)
-    print("Results saved")
+#     dummy = {
+#         "Hb": {"value": 12.5, "status": "Red"},
+#         "RBC": {"value": 5.2, "status": "Green"}
+#     }
+#     save_results(report_id, dummy)
+#     print("Results saved")
+
+#     results = get_results_by_report(report_id)
+#     print("Results:", results)
+
+#     delete_report(report_id)
+#     print("Report deleted")
