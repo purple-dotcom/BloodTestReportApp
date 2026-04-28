@@ -71,4 +71,26 @@ def get_parameter_id(short_name):
 def save_results(report_id, rag_status):
     con = get_connection()
     cursor = con.cursor()
-    cursor.execute("")
+    for short_name, data in rag_status.items():
+        para_id = get_parameter_id(short_name)
+        if para_id is None:
+            continue
+        cursor.execute("INSERT INTO results (report_id, parameter_id, value, rag_status) VALUES (%s, %s, %s, %s)", (report_id, para_id, data['value'], data['status']))
+    con.commit()
+    cursor.close()
+    con.close()
+
+def get_results_by_report(report_id):
+    con = get_connection()
+    cursor = con.cursor()
+    cursor.execute(
+        '''SELECT p.name, p.short_name, p.unit, r.value, r.rag_status
+        FROM results r
+        JOIN parameters p 
+        ON r.parameter_id = p.parameter_id
+        WHERE r.report_id = %s'''
+    ), ((report_id))
+    result = cursor.fetchall()
+    cursor.close()
+    con.close()
+    return result
