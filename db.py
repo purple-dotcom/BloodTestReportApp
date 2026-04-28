@@ -1,13 +1,16 @@
 import psycopg2 as psy
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def get_connection():
     return psy.connect(
-        host = "localhost",
-        database = "bloodtestreport",
-        user = "postgres", 
-        password = "P@ssw0rd"
+        host = os.getenv("DB_HOST"),
+        database = os.getenv("DB_NAME"),
+        user = os.getenv("DB_USER"), 
+        password = os.getenv("DB_PASSWORD")
         )
-# cursor = con.cursor()
 
 #--USER--#
 def create_user(name, email, password):
