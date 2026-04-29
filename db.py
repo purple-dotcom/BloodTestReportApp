@@ -62,6 +62,15 @@ def get_reports_by_user(user_id):
     con.close()
     return result
 
+def get_report_by_id(report_id):
+    con = get_connection()
+    cursor = con.cursor()
+    cursor.execute("SELECT id, user_id, patient_name FROM reports WHERE id = %s", (report_id,))
+    result = cursor.fetchone()
+    cursor.close()
+    con.close()
+    return result
+
 def delete_report(report_id):
     con = get_connection()
     cursor = con.cursor()
