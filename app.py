@@ -83,7 +83,7 @@ def upload():
     save_results(report_id, rag_results)
     return redirect(url_for('view_report', report_id = report_id))
 
-@app.route("/report/<int:report_id")
+@app.route("/report/<int:report_id>")
 def view_report(report_id):
     if not session.get('user_id'):
         return redirect(url_for('login'))
