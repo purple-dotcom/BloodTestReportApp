@@ -20,7 +20,7 @@ def signup():
     if request.method == "POST":
             namex = request.form['name']
             emailx = request.form['email']
-            password_hash = bcrypt.hashpw(request.form["password"].encode("utf-8"), bcrypt.gensalt())
+            password_hash = bcrypt.hashpw(request.form["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
             if get_user_by_email(emailx):
                 return render_template('signup.html', error = "Email already registered")
@@ -39,7 +39,7 @@ def login():
         if not user:
             return render_template('login.html', error = "Email not found")
 
-        if bcrypt.checkpw(request.form["password"].encode("utf-8"), bytes(user[3])):
+        if bcrypt.checkpw(request.form["password"].encode("utf-8"), user[3].encode("utf-8")):
             session['user_id'] = user[0]
             return redirect(url_for('dashboard'))
         else:
@@ -89,7 +89,7 @@ def view_report(report_id):
         return redirect(url_for('login'))
     
     report = get_report_by_id(report_id)
-    if not report or report_id[1] != session['user_id']:
+    if not report or report[1] != session['user_id']:
         return "Unauthorized", 403
     
     results = get_results_by_report(report_id)
