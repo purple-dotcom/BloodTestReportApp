@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Report</title>
+    </head>
+    <body>
+        <h2>{{ report[2] }} - {{ report[3] }}</h2>
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+                <th>Unit</th>
+                <th>Status</th>
+            </tr>
+            {% for row in results %}
+                <tr style="background-color: {% if row[4] == 'Red' %}#ffcccc{% elif row[4] == 'Amber' %}#fff3cc{% else %}#ccffcc{% endif %}">
+                    <td>{{ row[0] }}</td>
+                    <td>{{ row[3] }}</td>
+                    <td>{{ row[2] }}</td>
+                    <td>{{ row[4] }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+        <a href="{{url_for('dashboard')}}">Back to Dashboard</a>
+    </body>
+</html>

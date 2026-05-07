@@ -3,9 +3,11 @@ import bcrypt
 from extractor import *
 from rag import get_rag_status
 from db import *
+import os
 
 app = Flask(__name__)
 app.secret_key = "chain kulli ki main kulli"
+app.config['UPLOAD_FOLDER'] = 'uploads'
 
 @app.route("/")
 def index():
@@ -56,11 +58,56 @@ def dashboard():
 
 @app.route("/upload", methods = ["POST"])
 def upload():
-    pass
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    
+    file = request.files['pdf']
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    file.save(filepath)
+    
+    text = check_n_extract(filepath)
+    os.remove(filepath)
+    patient_info, raw_readings = parse_text(text)
+    clean_readings = get_short_name_values(raw_readings)
+    rag_results = get_rag_status(clean_readings, patient_info['sex'])
 
-@app.route("delete/<int:report_id>", methods = ["POST"])
-def delete():
-    pass
+    report_id = create_report(
+        session['user_id'],
+        patient_info['name'],
+        patient_info['age'],
+        patient_info['sex'],
+        "Unknown Lab",
+        None 
+    )
+
+    save_results(report_id, rag_results)
+    return redirect(url_for('view_report', report_id = report_id))
+
+@app.route("/report/<int:report_id")
+def view_report(report_id):
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    
+    report = get_report_by_id(report_id)
+    if not report or report_id[1] != session['user_id']:
+        return "Unauthorized", 403
+    
+    results = get_results_by_report(report_id)
+    return render_template('report.html', results = results, report = report)
+
+
+@app.route("/delete/<int:report_id>", methods = ["POST"])
+def delete(report_id):
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    
+    report = get_report_by_id(report_id)
+    if not report or report[1] != session['user_id']:
+        return "Unauthorized", 403
+    
+    delete_report(report_id)
+    return redirect(url_for('dashboard'))
+
 
 @app.route("/logout")
 def logout():
