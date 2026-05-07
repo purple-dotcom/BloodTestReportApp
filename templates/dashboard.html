@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Dashboard</title>
+    </head>
+    <body>
+        <h2>Welcome</h2>
+        <a href="{{url_for('logout')}}">Logout</a>
+
+        <h3>Your Reports</h3>
+        {% if reports %}
+            {% for report in reports %}
+                <div>
+                    <p>{{ report[1] }} — {{ report[2] }}</p>
+                <a href="{{ url_for('view_report', report_id=report[0]) }}">View</a>
+                <form action="{{ url_for('delete', report_id=report[0]) }}" method="post">
+                    <button type="submit">Delete</button>
+                </form>
+                </div>
+            {% endfor %}
+        {% else %}
+        <p>No reports yet.</p>
+        {% endif %}
+
+        <h3>Upload New Report</h3>
+        <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
+            <input type="file" name="pdf" accept=".pdf">
+            <button type="submit">Upload</button>
+        </form>
+    </body>
+</html>

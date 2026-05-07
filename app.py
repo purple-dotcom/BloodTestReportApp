@@ -48,7 +48,11 @@ def login():
 
 @app.route("/dashboard")
 def dashboard():
-    pass
+    if not session.get('user_id'):
+        return redirect(url_for('login'))
+    
+    reports = get_reports_by_user(session['user_id'])
+    return render_template('dashboard.html', reports = reports)
 
 @app.route("/upload", methods = ["POST"])
 def upload():
@@ -60,7 +64,8 @@ def delete():
 
 @app.route("/logout")
 def logout():
-    pass
+    session.pop('user_id', None)
+    return redirect(url_for('index'))
 
 if __name__ == "__main__":
     app.run(debug=True)
