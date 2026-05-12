@@ -21,15 +21,6 @@ def check_n_extract(pdf_path):
         else:
             return "unknown"
 
-# loc1 = r"C:\Users\DELL\Downloads\proton-recovery-kit.pdf"
-# print(check_n_extract(loc1))
-# loc2 = r"C:\Users\DELL\Downloads\CBC-test-report-format-example-sample-template-Drlogy-lab-report.pdf"
-# txt = check_n_extract(loc2)
-
-# for line in txt.split('\n'):
-#     if any(x in line for x in ['MCH', 'MCHC', 'RDW']):
-#         print(repr(line))
-
 def parse_text(text):
     patient_info = {}
     report_readings = {}
@@ -114,8 +105,7 @@ def parse_text(text):
 
     return patient_info, report_readings
 
-# readings = parse_text(txt) #returns 2 dictionaries
-# print(output)
+
 fallback = {
     "Total RBC count": "RBC",
     "Total WBC count": "WBC",
