@@ -72,10 +72,17 @@ def upload():
         return redirect(url_for('login'))
     
     file = request.files['pdf']
+    filename = file.filename
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(filepath)
     
-    text = check_n_extract(filepath)
+    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+        import pytesseract
+        from PIL import Image
+        text = pytesseract.image_to_string(Image.open(filepath))
+    else:
+        text = check_n_extract(filepath)
+        
     os.remove(filepath)
     patient_info, raw_readings = parse_text(text)
     clean_readings = get_short_name_values(raw_readings)

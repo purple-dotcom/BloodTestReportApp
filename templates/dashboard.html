@@ -35,7 +35,7 @@
                 <h5 class="card-title">Upload Report</h5>
                 <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <input type="file" name="pdf" accept=".pdf" class="form-control">
+                        <input type="file" name="pdf" accept=".pdf, image/*" class="form-control">
                     </div>
                     <button type="submit" class="btn btn-dark w-100">Upload</button>
                 </form>
