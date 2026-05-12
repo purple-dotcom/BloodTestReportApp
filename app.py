@@ -6,7 +6,7 @@ from db import *
 import os
 
 app = Flask(__name__)
-app.secret_key = "chain kulli ki main kulli"
+app.secret_key = os.getenv('SECRET_KEY')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 
 @app.route("/")
@@ -73,11 +73,11 @@ def upload():
 
     report_id = create_report(
         session['user_id'],
-        patient_info['name'],
-        patient_info['age'],
-        patient_info['sex'],
-        "Unknown Lab",
-        None 
+        patient_info.get('name', 'Unknown'),
+        patient_info.get('age'),
+        patient_info.get('sex'),
+        patient_info.get('lab_name', 'Unknown Lab'),
+        patient_info.get('report_date')
     )
 
     save_results(report_id, rag_results)
