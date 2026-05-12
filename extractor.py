@@ -1,6 +1,7 @@
 import pdfplumber
 import re
 import pytesseract
+from datetime import datetime
 
 def check_n_extract(pdf_path):
     text_found, image_found = False, False
@@ -35,17 +36,30 @@ def parse_text(text):
 
     # patient info patterns
     age_match = re.search(r"Age\s*:\s*(\d+)", text)
-    sex_match = re.search(r"Sex\s*:\s*(\w+)", text)
+    sex_match = re.search(r"Sex\s*:\s*(Male|Female)", text, re.IGNORECASE)
+    gender_match = re.search(r"Gender\s*:\s*(Male|Female)", text, re.IGNORECASE)
+    age_gender_match = re.search(r"(\d+)\s*/\s*(Male|Female)", text, re.IGNORECASE)
     name_match = re.search(r"^([A-Z][a-z]+(?:\s[A-Z]\.?\s?[A-Za-z]+)*)\s+Sample Collected", text, re.MULTILINE)
+    name_match2 = re.search(r"Name\s*:\s*([A-Za-z\s\.]+?)(?:\s{2,}|$)", text, re.MULTILINE)
     lab_match = re.search(r"^(.+?(?:Laboratory|Lab|Pathology|Diagnostics)[^\n]*)", text, re.MULTILINE | re.IGNORECASE)
     date_match = re.search(r"(\d{1,2}[\s\-\/]\w+[\s\-\/]\d{2,4})", text)
     
     if age_match:
         patient_info["age"] = int(age_match.group(1))
+    elif age_gender_match:
+        patient_info["age"] = int(age_gender_match.group(1))
+
     if sex_match:
         patient_info["sex"] = sex_match.group(1)
+    elif gender_match:
+        patient_info["sex"] = gender_match.group(1)
+    elif age_gender_match:
+        patient_info["sex"] = age_gender_match.group(2)
+
     if name_match:
         patient_info["name"] = name_match.group(1)
+    elif name_match2:
+        patient_info["name"] = name_match2.group(1).strip()
 
     if lab_match:
         patient_info["lab_name"] = lab_match.group(1).strip()
@@ -53,9 +67,20 @@ def parse_text(text):
         patient_info["lab_name"] = "Unknown Lab"
 
     if date_match:
-        patient_info["report_date"] = date_match.group(1)
+        raw_date = date_match.group(1)
+        # try multiple formats
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y"):
+            try:
+                patient_info["report_date"] = datetime.strptime(raw_date, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+        else:
+            patient_info["report_date"] = None
     else:
         patient_info["report_date"] = None
+
+    print(patient_info)
 
     # parameter pattern
     param_pattern = re.compile(

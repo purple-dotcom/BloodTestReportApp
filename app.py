@@ -6,6 +6,7 @@ from db import *
 import os
 from dotenv import load_dotenv
 from datetime import timedelta
+import pytesseract
 
 
 app = Flask(__name__)
@@ -66,23 +67,24 @@ def dashboard():
     reports = get_reports_by_user(session['user_id'])
     return render_template('dashboard.html', reports = reports)
 
-@app.route("/upload", methods = ["POST"])
+@app.route("/upload", methods=["POST"])
 def upload():
     if not session.get('user_id'):
         return redirect(url_for('login'))
-    
+
     file = request.files['pdf']
-    filename = file.filename
+    if not file or file.filename == '':
+        return redirect(url_for('dashboard'))
+
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(filepath)
-    
-    if filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-        import pytesseract
+
+    if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
         from PIL import Image
         text = pytesseract.image_to_string(Image.open(filepath))
     else:
         text = check_n_extract(filepath)
-        
+
     os.remove(filepath)
     patient_info, raw_readings = parse_text(text)
     clean_readings = get_short_name_values(raw_readings)
@@ -98,7 +100,7 @@ def upload():
     )
 
     save_results(report_id, rag_results)
-    return redirect(url_for('view_report', report_id = report_id))
+    return redirect(url_for('view_report', report_id=report_id))
 
 @app.route("/report/<int:report_id>")
 def view_report(report_id):
