@@ -37,7 +37,7 @@ def parse_text(text):
     age_match = re.search(r"Age\s*:\s*(\d+)", text)
     sex_match = re.search(r"Sex\s*:\s*(\w+)", text)
     name_match = re.search(r"^([A-Z][a-z]+(?:\s[A-Z]\.?\s?[A-Za-z]+)*)\s+Sample Collected", text, re.MULTILINE)
-    lab_match = re.search(r"^(.+?)(?:Laboratory|Lab|Pathology|Diagnostics).+", text, re.MULTILINE | re.IGNORECASE)
+    lab_match = re.search(r"^(.+?(?:Laboratory|Lab|Pathology|Diagnostics)[^\n]*)", text, re.MULTILINE | re.IGNORECASE)
     date_match = re.search(r"(\d{1,2}[\s\-\/]\w+[\s\-\/]\d{2,4})", text)
     
     if age_match:
@@ -46,10 +46,12 @@ def parse_text(text):
         patient_info["sex"] = sex_match.group(1)
     if name_match:
         patient_info["name"] = name_match.group(1)
+
     if lab_match:
-        patient_info["lab_name"] = lab_match.group(0).strip()
+        patient_info["lab_name"] = lab_match.group(1).strip()
     else:
         patient_info["lab_name"] = "Unknown Lab"
+
     if date_match:
         patient_info["report_date"] = date_match.group(1)
     else:
@@ -89,7 +91,6 @@ def parse_text(text):
 
 # readings = parse_text(txt) #returns 2 dictionaries
 # print(output)
-
 fallback = {
     "Total RBC count": "RBC",
     "Total WBC count": "WBC",

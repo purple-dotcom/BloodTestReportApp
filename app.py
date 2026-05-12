@@ -1,13 +1,22 @@
 from flask import Flask, render_template, url_for, request, redirect, session
 import bcrypt
-from extractor import *
+from extractor import check_n_extract, parse_text, get_short_name_values
 from rag import get_rag_status
 from db import *
 import os
+from dotenv import load_dotenv
+from datetime import timedelta
+
 
 app = Flask(__name__)
+load_dotenv()
 app.secret_key = os.getenv('SECRET_KEY')
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.permanent_session_lifetime = timedelta(days=7)
+
+@app.context_processor
+def inject_session():
+    return dict(session=session)
 
 @app.route("/")
 def index():
@@ -40,6 +49,7 @@ def login():
             return render_template('login.html', error = "Email not found")
 
         if bcrypt.checkpw(request.form["password"].encode("utf-8"), user[3].encode("utf-8")):
+            session.permanent = True
             session['user_id'] = user[0]
             return redirect(url_for('dashboard'))
         else:

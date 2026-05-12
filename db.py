@@ -65,7 +65,7 @@ def get_reports_by_user(user_id):
 def get_report_by_id(report_id):
     con = get_connection()
     cursor = con.cursor()
-    cursor.execute("SELECT id, user_id, patient_name FROM reports WHERE id = %s", (report_id,))
+    cursor.execute("SELECT id, user_id, patient_name, lab_name, report_date FROM reports WHERE id = %s", (report_id,))
     result = cursor.fetchone()
     cursor.close()
     con.close()
@@ -92,11 +92,15 @@ def get_parameter_id(short_name):
 def save_results(report_id, rag_status):
     con = get_connection()
     cursor = con.cursor()
+    cursor.execute("SELECT short_name, id FROM parameters")
+    param_map = {row[0]: row[1] for row in cursor.fetchall()}
+    
     for short_name, data in rag_status.items():
-        para_id = get_parameter_id(short_name)
+        para_id = param_map.get(short_name)
         if para_id is None:
             continue
         cursor.execute("INSERT INTO results (report_id, parameter_id, value, rag_status) VALUES (%s, %s, %s, %s)", (report_id, para_id, data['value'], data['status']))
+    
     con.commit()
     cursor.close()
     con.close()
@@ -115,36 +119,3 @@ def get_results_by_report(report_id):
     cursor.close()
     con.close()
     return result
-
-#TESTING
-# if __name__ == '__main__':
-#     user_id = create_user("Test", "test69@gmail.com", "password123")
-#     print(f"Created User : {user_id}")
-
-#     user = get_user_by_email("test69@gmail.com")
-#     print("Fetched user:", user)
-
-#     user = get_user_by_id(user_id)
-#     print("Fetched by id:", user)
-
-#     report_id = create_report(user_id, "Test", 25, "Male", "Test Lab", "2011-11-11")
-#     print(f"Created report : {report_id}")
-
-#     reports = get_reports_by_user(user_id)
-#     print(f"Reports fetched : {reports}")
-
-#     param_id = get_parameter_id("Hb")
-#     print("Parameter id:", param_id)
-
-#     dummy = {
-#         "Hb": {"value": 12.5, "status": "Red"},
-#         "RBC": {"value": 5.2, "status": "Green"}
-#     }
-#     save_results(report_id, dummy)
-#     print("Results saved")
-
-#     results = get_results_by_report(report_id)
-#     print("Results:", results)
-
-#     delete_report(report_id)
-#     print("Report deleted")
