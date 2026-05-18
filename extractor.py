@@ -6,7 +6,7 @@ from datetime import datetime
 def check_n_extract(pdf_path):
     text_found, image_found = False, False
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages[:4]:
+        for page in pdf.pages:
             text = page.extract_text()
             if text and text.strip():
                 text_found = True
@@ -71,7 +71,7 @@ def parse_text(text):
     else:
         patient_info["report_date"] = None
 
-    print(patient_info)
+    #print(patient_info)
 
     # parameter pattern
     param_pattern = re.compile(
@@ -96,7 +96,7 @@ def parse_text(text):
     for match in param_pattern.finditer(text):
         name = match.group(1).strip()
         value = float(match.group(2))
-        unit = match.group(5)
+#       unit = match.group(5)
 
         # skip if name matches noise
         if skip_regex.match(name):

@@ -15,10 +15,6 @@ app.secret_key = os.getenv('SECRET_KEY')
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.permanent_session_lifetime = timedelta(days=7)
 
-@app.context_processor
-def inject_session():
-    return dict(session=session)
-
 @app.route("/")
 def index():
     if session.get("user_id"):
@@ -35,6 +31,7 @@ def signup():
             if get_user_by_email(emailx):
                 return render_template('signup.html', error = "Email already registered")
             
+            session.permanent = True
             session["user_id"] = create_user(namex, emailx, password_hash)
             return redirect(url_for('dashboard'))
     
