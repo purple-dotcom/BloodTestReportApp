@@ -85,7 +85,10 @@ def upload():
     os.remove(filepath)
     patient_info, raw_readings = parse_text(text)
     clean_readings = get_short_name_values(raw_readings)
-    rag_results = get_rag_status(clean_readings, patient_info['sex'])
+    rag_results = get_rag_status(clean_readings, patient_info.get('sex', 'Male'))
+
+    if not rag_results:
+        return render_template('dashboard.html', reports=get_reports_by_user(session['user_id']), error="No CBC parameters found in this report.")
 
     report_id = create_report(
         session['user_id'],

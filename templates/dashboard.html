@@ -24,6 +24,9 @@
                 </div>
             </div>
             {% endfor %}
+            {% if error %}
+                <div class="alert alert-warning">{{ error }}</div>
+            {% endif %}
         {% else %}
             <p class="text-muted">No reports uploaded yet.</p>
         {% endif %}
