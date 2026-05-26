@@ -3,3 +3,4 @@ __pycache__/
 .env
 venv/
 uploads/
+s -ExecutionPolicy RemoteSigned) ; (& dBloodTestReportAppvenvScriptsActivate.ps1)

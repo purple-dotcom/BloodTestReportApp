@@ -55,10 +55,10 @@ def parse_text(text):
 
     if name_match:
         patient_info["name"] = name_match.group(1)
+    elif name_match3:
+        patient_info["name"] = name_match3.group(1).strip().title()
     elif name_match2:
         patient_info["name"] = name_match2.group(1).strip()
-    elif name_match3:
-        patient_info["name"] = name_match3.group(1).strip()
 
     if lab_match:
         patient_info["lab_name"] = lab_match.group(1).strip()
@@ -87,6 +87,16 @@ def parse_text(text):
     re.MULTILINE
     )
 
+    multiline_param_pattern = re.compile(
+        r"^([A-Za-z][A-Za-z ()\/%\-]*?)\s*\n"  # name line: letters/spaces only, no digits
+        r"(?:[A-Za-z][^\n]*\n)?"               # optional noise line (must start with a letter, not a digit)
+        r"[ \t]*(\d+\.?\d*)[ \t]+"             # measured value at start of next line
+        r"\S+[ \t]+"                            # unit token (skip it)
+        r"(?:[A-Za-z][^\n:]*:\s*)?"            # optional label e.g. "Adult Male :"
+        r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)",      # ref range: min - max
+        re.MULTILINE
+    )
+
     # noise to skip
     skip_patterns = [
         r"^[A-Z][A-Z\s]{4,}$",  # all caps AND at least 5 chars long
@@ -112,6 +122,16 @@ def parse_text(text):
         report_readings[name] = value
 
     return patient_info, report_readings
+
+    for match in multiline_param_pattern.finditer(text):
+        name = match.group(1).strip()
+        value = float(match.group(2))
+
+        if skip_regex.match(name):
+            continue
+        if name in report_readings:   # already caught by single-line pattern, don't overwrite
+            continue
+        report_readings[name] = value
 
 
 fallback = {

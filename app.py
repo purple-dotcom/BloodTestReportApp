@@ -7,6 +7,7 @@ import os
 from dotenv import load_dotenv
 from datetime import timedelta
 import pytesseract
+from werkzeug.utils import secure_filename
 
 
 app = Flask(__name__)
@@ -73,7 +74,8 @@ def upload():
     if not file or file.filename == '':
         return redirect(url_for('dashboard'))
 
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+
     file.save(filepath)
 
     if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
@@ -85,7 +87,7 @@ def upload():
     os.remove(filepath)
     patient_info, raw_readings = parse_text(text)
     clean_readings = get_short_name_values(raw_readings)
-    rag_results = get_rag_status(clean_readings, patient_info.get('sex', 'Male'))
+    rag_results = get_rag_status(clean_readings, patient_info.get('sex', 'male'))
 
     if not rag_results:
         return render_template('dashboard.html', reports=get_reports_by_user(session['user_id']), error="No CBC parameters found in this report.")
@@ -94,7 +96,7 @@ def upload():
         session['user_id'],
         patient_info.get('name', 'Unknown'),
         patient_info.get('age'),
-        patient_info.get('sex'),
+        patient_info.get('sex', 'male'),
         patient_info.get('lab_name', 'Unknown Lab'),
         patient_info.get('report_date')
     )
