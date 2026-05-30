@@ -1,6 +1,6 @@
 from flask import Flask, render_template, url_for, request, redirect, session
 import bcrypt
-from extractor import check_n_extract, parse_text, get_short_name_values
+from extractor import check_n_extract, parse_text
 from rag import get_rag_status
 from db import *
 import os
@@ -22,48 +22,49 @@ def index():
         return redirect(url_for('dashboard'))
     return render_template('index.html')
 
-@app.route("/signup", methods = ["GET", "POST"])
+@app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-            namex = request.form['name']
-            emailx = request.form['email']
-            password_hash = bcrypt.hashpw(request.form["password"].encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        namex = request.form['name']
+        emailx = request.form['email']
+        password_hash = bcrypt.hashpw(
+            request.form["password"].encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
 
-            if get_user_by_email(emailx):
-                return render_template('signup.html', error = "Email already registered")
-            
-            session.permanent = True
-            session["user_id"] = create_user(namex, emailx, password_hash)
-            return redirect(url_for('dashboard'))
-    
+        if get_user_by_email(emailx):
+            return render_template('signup.html', error="Email already registered")
+
+        session.permanent = True
+        session["user_id"] = create_user(namex, emailx, password_hash)
+        return redirect(url_for('dashboard'))
+
     return render_template('signup.html')
 
-@app.route("/login", methods = ["GET", "POST"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         emailx = request.form['email']
         user = get_user_by_email(emailx)
 
         if not user:
-            return render_template('login.html', error = "Email not found")
+            return render_template('login.html', error="Email not found")
 
         if bcrypt.checkpw(request.form["password"].encode("utf-8"), user[3].encode("utf-8")):
             session.permanent = True
             session['user_id'] = user[0]
             return redirect(url_for('dashboard'))
         else:
-            return render_template('login.html', error = "Wrong password")
-        
-    return render_template('login.html')
+            return render_template('login.html', error="Wrong password")
 
+    return render_template('login.html')
 
 @app.route("/dashboard")
 def dashboard():
     if not session.get('user_id'):
         return redirect(url_for('login'))
-    
+
     reports = get_reports_by_user(session['user_id'])
-    return render_template('dashboard.html', reports = reports)
+    return render_template('dashboard.html', reports=reports)
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -75,7 +76,6 @@ def upload():
         return redirect(url_for('dashboard'))
 
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
-
     file.save(filepath)
 
     if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
@@ -85,12 +85,16 @@ def upload():
         text = check_n_extract(filepath)
 
     os.remove(filepath)
-    patient_info, raw_readings = parse_text(text)
-    clean_readings = get_short_name_values(raw_readings)
-    rag_results = get_rag_status(clean_readings, patient_info.get('sex', 'male'))
+
+    patient_info, report_readings = parse_text(text)
+    rag_results = get_rag_status(report_readings)
 
     if not rag_results:
-        return render_template('dashboard.html', reports=get_reports_by_user(session['user_id']), error="No CBC parameters found in this report.")
+        return render_template(
+            'dashboard.html',
+            reports=get_reports_by_user(session['user_id']),
+            error="No parameters with reference ranges found in this report."
+        )
 
     report_id = create_report(
         session['user_id'],
@@ -108,27 +112,25 @@ def upload():
 def view_report(report_id):
     if not session.get('user_id'):
         return redirect(url_for('login'))
-    
+
     report = get_report_by_id(report_id)
     if not report or report[1] != session['user_id']:
         return "Unauthorized", 403
-    
+
     results = get_results_by_report(report_id)
-    return render_template('report.html', results = results, report = report)
+    return render_template('report.html', results=results, report=report)
 
-
-@app.route("/delete/<int:report_id>", methods = ["POST"])
+@app.route("/delete/<int:report_id>", methods=["POST"])
 def delete(report_id):
     if not session.get('user_id'):
         return redirect(url_for('login'))
-    
+
     report = get_report_by_id(report_id)
     if not report or report[1] != session['user_id']:
         return "Unauthorized", 403
-    
+
     delete_report(report_id)
     return redirect(url_for('dashboard'))
-
 
 @app.route("/logout")
 def logout():

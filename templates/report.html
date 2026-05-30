@@ -14,16 +14,17 @@
         <tr>
             <th>Parameter</th>
             <th>Value</th>
-            <th>Unit</th>
+            <th>Reference Range</th>
             <th>Status</th>
         </tr>
     </thead>
     <tbody>
         {% for row in results %}
+        {# row: (parameter_name, value, ref_min, ref_max, rag_status) #}
         <tr class="{% if row[4] == 'Red' %}table-danger{% elif row[4] == 'Amber' %}table-warning{% else %}table-success{% endif %}">
             <td>{{ row[0] }}</td>
-            <td>{{ row[3] }}</td>
-            <td>{{ row[2] }}</td>
+            <td>{{ row[1] }}</td>
+            <td>{{ row[2] }} – {{ row[3] }}</td>
             <td>{{ row[4] }}</td>
         </tr>
         {% endfor %}

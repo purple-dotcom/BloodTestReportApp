@@ -4,6 +4,11 @@
 <div class="row">
     <div class="col-md-8">
         <h4 class="mb-4">Your Reports</h4>
+
+        {% if error %}
+            <div class="alert alert-warning">{{ error }}</div>
+        {% endif %}
+
         {% if reports %}
             {% for report in reports %}
             <div class="card mb-3 shadow-sm">
@@ -11,7 +16,7 @@
                     <div>
                         <h6 class="mb-1">{{ report[1] }}</h6>
                         <small class="text-muted">
-                            {{ report[2] or 'Unknown date' }} &nbsp;·&nbsp; 
+                            {{ report[2] or 'Unknown date' }} &nbsp;·&nbsp;
                             Uploaded {{ report[3].strftime('%d %b %Y') if report[3] else 'Unknown date' }}
                         </small>
                     </div>
@@ -24,9 +29,6 @@
                 </div>
             </div>
             {% endfor %}
-            {% if error %}
-                <div class="alert alert-warning">{{ error }}</div>
-            {% endif %}
         {% else %}
             <p class="text-muted">No reports uploaded yet.</p>
         {% endif %}
