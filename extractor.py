@@ -8,14 +8,14 @@ def check_n_extract(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             text = page.extract_text()
-            if text and text.strip():
+            if text and text.strip(): #does what?
                 text_found = True
             if page.images:
                 image_found = True
-    
-        if text_found:  #ignore decorative images
+
+        if text_found:   # ignore decorative images
             return pdf.pages[0].extract_text()
-        elif image_found:  # no text at all, actual scanned pdf
+        elif image_found:  # no text at all — actual scanned PDF
             image = pdf.pages[0].to_image().original
             return pytesseract.image_to_string(image)
         else:
@@ -25,38 +25,44 @@ def parse_text(text):
     patient_info = {}
     report_readings = {}
 
-    # patient info patterns
-    age_match = re.search(r"Age\s*:\s*(\d+)", text)
-    sex_match = re.search(r"Sex\s*:\s*(Male|Female)", text, re.IGNORECASE)
-    gender_match = re.search(r"Gender\s*:\s*(Male|Female)", text, re.IGNORECASE)
-    age_gender_match = re.search(r"(\d+)\s*/\s*(Male|Female)", text, re.IGNORECASE)
+    # --- patient info patterns ---
+
+    age_match        = re.search(r"Age\s*:\s*(\d+)", text)
+    sex_match        = re.search(r"Sex\s*:\s*(Male|Female)", text, re.IGNORECASE)
+    gender_match     = re.search(r"Gender\s*:\s*(Male|Female)", text, re.IGNORECASE)
+    age_gender_match  = re.search(r"(\d+)\s*/\s*(Male|Female)", text, re.IGNORECASE)
     age_gender_match2 = re.search(r"(\d+)\s*Years?\s*/\s*(Male|Female)", text, re.IGNORECASE)
-    name_match = re.search(r"^([A-Z][a-z]+(?:\s[A-Z]\.?\s?[A-Za-z]+)*)\s+Sample Collected", text, re.MULTILINE)
+    name_match  = re.search(r"^([A-Z][a-z]+(?:\s[A-Z]\.?\s?[A-Za-z]+)*)\s+Sample Collected", text, re.MULTILINE)
     name_match2 = re.search(r"Name\s*:\s*([A-Za-z\s\.]+?)(?:\s{2,}|$)", text, re.MULTILINE)
     name_match3 = re.search(r"Patient\s*Name\s*:\s*(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?)?\s*([A-Z][A-Z\s]+?)(?:\s{2,}|$)", text, re.MULTILINE | re.IGNORECASE)
-    lab_match = re.search(r"^(.+?(?:Laboratory|Lab|Pathology|Diagnostics)[^\n]*)", text, re.MULTILINE | re.IGNORECASE)
-    date_match = re.search(r"(\d{1,2}[\s\-\/]\w+[\s\-\/]\d{2,4})", text)
-    
+    lab_match   = re.search(r"^(.+?(?:Laboratory|Lab|Pathology|Diagnostics)[^\n]*)", text, re.MULTILINE | re.IGNORECASE)
+    date_match  = re.search(r"(\d{1,2}[\s\-\/]\w+[\s\-\/]\d{2,4})", text)
+
+    # age — age_gender_match2 is more specific ("52 Years / Male") so check it first
     if age_match:
         patient_info["age"] = int(age_match.group(1))
-    elif age_gender_match:
-        patient_info["age"] = int(age_gender_match.group(1))
     elif age_gender_match2:
         patient_info["age"] = int(age_gender_match2.group(1))
-
-    if sex_match:
-        patient_info["sex"] = sex_match.group(1)
-    elif gender_match:
-        patient_info["sex"] = gender_match.group(1)
     elif age_gender_match:
-        patient_info["sex"] = age_gender_match.group(2)
-    elif age_gender_match2:
-        patient_info["sex"] = age_gender_match2.group(2)
+        patient_info["age"] = int(age_gender_match.group(1))
 
+    # sex — .capitalize() normalises whatever case the PDF uses to "Male" / "Female"
+    if sex_match:
+        patient_info["sex"] = sex_match.group(1).capitalize()
+    elif gender_match:
+        patient_info["sex"] = gender_match.group(1).capitalize()
+    elif age_gender_match2:
+        patient_info["sex"] = age_gender_match2.group(2).capitalize()
+    elif age_gender_match:
+        patient_info["sex"] = age_gender_match.group(2).capitalize()
+
+    # name — name_match3 ("Patient Name : MR. IRFAN SHAIKH") must come before the
+    # generic name_match2 ("Name : ..."), otherwise name_match2 fires first and
+    # captures the title prefix as part of the name
     if name_match:
         patient_info["name"] = name_match.group(1)
     elif name_match3:
-        patient_info["name"] = name_match3.group(1).strip().title()
+        patient_info["name"] = name_match3.group(1).strip().title()  # "IRFAN SHAIKH" → "Irfan Shaikh"
     elif name_match2:
         patient_info["name"] = name_match2.group(1).strip()
 
@@ -67,7 +73,6 @@ def parse_text(text):
 
     if date_match:
         raw_date = date_match.group(1)
-        # try multiple formats
         for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y"):
             try:
                 patient_info["report_date"] = datetime.strptime(raw_date, fmt).strftime("%Y-%m-%d")
@@ -79,27 +84,50 @@ def parse_text(text):
     else:
         patient_info["report_date"] = None
 
-    #print(patient_info)
+    # --- parameter patterns ---
+    #
+    # report_readings stores: { parameter_name: (value, ref_min, ref_max) }
 
-    # parameter pattern
+    # Single-line pattern.
+    # Handles two common lab layouts:
+    #   Format A — "name  value  ref_min - ref_max  unit"   (unit after range)
+    #   Format B — "name  value  unit  ref_min - ref_max"   (unit before range)
+    # The optional (?:\S+\s+)? group absorbs the unit when it sits before the range;
+    # when the unit is after the range, that group is simply skipped by backtracking.
     param_pattern = re.compile(
-    r"^(.+?)\s+(\d+\.?\d*)\s+(?:Low|High|Borderline|Calculated)?\s*(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s+(\S+)",
-    re.MULTILINE
-    )
-
-    multiline_param_pattern = re.compile(
-        r"^([A-Za-z][A-Za-z ()\/%\-]*?)\s*\n"  # name line: letters/spaces only, no digits
-        r"(?:[A-Za-z][^\n]*\n)?"               # optional noise line (must start with a letter, not a digit)
-        r"[ \t]*(\d+\.?\d*)[ \t]+"             # measured value at start of next line
-        r"\S+[ \t]+"                            # unit token (skip it)
-        r"(?:[A-Za-z][^\n:]*:\s*)?"            # optional label e.g. "Adult Male :"
-        r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)",      # ref range: min - max
+        r"^(.+?)\s+(\d+\.?\d*)\s+"
+        r"(?:\S+\s+)?"                              # optional unit before the range (Format B)
+        r"(?:Low|High|Borderline|Calculated)?\s*"  # optional qualifier (some CBC formats)
+        r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)",          # ref range: min - max
         re.MULTILINE
     )
 
-    # noise to skip
+    # Multi-line pattern.
+    # Handles reports where the parameter name is on its own line and the value +
+    # range appear on the next line, sometimes with an instrument/method noise line
+    # in between:
+    #
+    #   Haemoglobin
+    #   Done on fully Automatic Mispa Count Xplus
+    #   15.9 g/dl Adult Male : 13.5 - 17.5 g/dl
+    #
+    # Key constraints that prevent false matches:
+    #   - Name line: must start with a letter (no leading digit, so data lines are excluded)
+    #   - Noise line: optional, must also start with a letter
+    #   - Value line: starts with a digit (the measured value)
+    multiline_param_pattern = re.compile(
+        r"^([A-Za-z][A-Za-z0-9 ()\/%\-]*?)\s*\n"  # name line (starts with letter)
+        r"(?:[A-Za-z][^\n]*\n)?"                    # optional noise line (starts with letter)
+        r"[ \t]*(\d+\.?\d*)[ \t]+"                  # measured value
+        r"\S+[ \t]+"                                 # unit
+        r"(?:[A-Za-z][^\n:]*:\s*)?"                 # optional label e.g. "Adult Male :"
+        r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)",           # ref range: min - max
+        re.MULTILINE
+    )
+
+    # noise lines / section headers to skip
     skip_patterns = [
-        r"^[A-Z][A-Z\s]{4,}$",  # all caps AND at least 5 chars long
+        r"^[A-Z][A-Z\s]{4,}$",   # all-caps strings ≥5 chars (section headers)
         r"^Calculated$",
         r"^Primary Sample",
         r"^Investigation",
@@ -107,55 +135,30 @@ def parse_text(text):
         r"^Sample Collection",
         r"^Thanks",
         r"^Instruments",
-        r"^Interpretation"
+        r"^Interpretation",
     ]
     skip_regex = re.compile("|".join(skip_patterns), re.MULTILINE)
 
     for match in param_pattern.finditer(text):
-        name = match.group(1).strip()
-        value = float(match.group(2))
-#       unit = match.group(5)
+        name    = match.group(1).strip()
+        value   = float(match.group(2))
+        ref_min = float(match.group(3))
+        ref_max = float(match.group(4))
 
-        # skip if name matches noise
         if skip_regex.match(name):
             continue
-        report_readings[name] = value
-
-    return patient_info, report_readings
+        report_readings[name] = (value, ref_min, ref_max)
 
     for match in multiline_param_pattern.finditer(text):
-        name = match.group(1).strip()
-        value = float(match.group(2))
+        name    = match.group(1).strip()
+        value   = float(match.group(2))
+        ref_min = float(match.group(3))
+        ref_max = float(match.group(4))
 
         if skip_regex.match(name):
             continue
-        if name in report_readings:   # already caught by single-line pattern, don't overwrite
+        if name in report_readings:   # already captured by single-line pattern
             continue
-        report_readings[name] = value
+        report_readings[name] = (value, ref_min, ref_max)
 
-
-fallback = {
-    "Total RBC count": "RBC",
-    "Total WBC count": "WBC",
-    "Neutrophils": "NEUT",
-    "Lymphocytes": "LYMPH",
-    "Eosinophils": "EOS",
-    "Monocytes": "MONO",
-    "Basophils": "BASO",
-    "Platelet Count": "PLT"
-}
-
-def get_short_name_values(readings):
-    cleaned = {}
-    for name, value in readings.items():
-        match = re.search(r"\((\w+)\)", name)
-        if match:
-            short = match.group(1)
-        elif name in fallback:
-            short = fallback[name]
-        else:
-            short = name
-        cleaned[short] = value
-    return cleaned
-
-#print(get_short_name_values(readings[1])) #pass the 2nd dictionary (report_readings)
+    return patient_info, report_readings
