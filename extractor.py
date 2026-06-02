@@ -8,13 +8,15 @@ def check_n_extract(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
             text = page.extract_text()
-            if text and text.strip(): #does what?
+            if text and text.strip():
                 text_found = True
             if page.images:
                 image_found = True
 
         if text_found:   # ignore decorative images
-            return pdf.pages[0].extract_text()
+            txt = pdf.pages[0].extract_text()
+            #print(repr(txt))
+            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text() and page.extract_text().strip())
         elif image_found:  # no text at all — actual scanned PDF
             image = pdf.pages[0].to_image().original
             return pytesseract.image_to_string(image)
@@ -34,7 +36,7 @@ def parse_text(text):
     age_gender_match2 = re.search(r"(\d+)\s*Years?\s*/\s*(Male|Female)", text, re.IGNORECASE)
     name_match  = re.search(r"^([A-Z][a-z]+(?:\s[A-Z]\.?\s?[A-Za-z]+)*)\s+Sample Collected", text, re.MULTILINE)
     name_match2 = re.search(r"Name\s*:\s*([A-Za-z\s\.]+?)(?:\s{2,}|$)", text, re.MULTILINE)
-    name_match3 = re.search(r"Patient\s*Name\s*:\s*(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?)?\s*([A-Z][A-Z\s]+?)(?:\s{2,}|$)", text, re.MULTILINE | re.IGNORECASE)
+    name_match3 = re.search(r"Patient\s*Name\s*:\s*(?:Mr\.?|Mrs\.?|Ms\.?|Dr\.?)?\s*([A-Z][A-Z\s]+?)(?=\s+(?:Age|Gender|Sex|Ref|DOB|Date|Contact|Phone)|\s{2,}|$)", text, re.MULTILINE | re.IGNORECASE)
     lab_match   = re.search(r"^(.+?(?:Laboratory|Lab|Pathology|Diagnostics)[^\n]*)", text, re.MULTILINE | re.IGNORECASE)
     date_match  = re.search(r"(\d{1,2}[\s\-\/]\w+[\s\-\/]\d{2,4})", text)
 
@@ -46,7 +48,6 @@ def parse_text(text):
     elif age_gender_match:
         patient_info["age"] = int(age_gender_match.group(1))
 
-    # sex — .capitalize() normalises whatever case the PDF uses to "Male" / "Female"
     if sex_match:
         patient_info["sex"] = sex_match.group(1).capitalize()
     elif gender_match:
@@ -56,9 +57,7 @@ def parse_text(text):
     elif age_gender_match:
         patient_info["sex"] = age_gender_match.group(2).capitalize()
 
-    # name — name_match3 ("Patient Name : MR. IRFAN SHAIKH") must come before the
-    # generic name_match2 ("Name : ..."), otherwise name_match2 fires first and
-    # captures the title prefix as part of the name
+    # name_match3 ("Patient Name : MR. IRFAN SHAIKH") must come before the generic name_match2 ("Name : ..."), otherwise name_match2 fires first and captures the title prefix as part of the name
     if name_match:
         patient_info["name"] = name_match.group(1)
     elif name_match3:
@@ -95,10 +94,10 @@ def parse_text(text):
     # The optional (?:\S+\s+)? group absorbs the unit when it sits before the range;
     # when the unit is after the range, that group is simply skipped by backtracking.
     param_pattern = re.compile(
-        r"^(.+?)\s+(\d+\.?\d*)\s+"
-        r"(?:\S+\s+)?"                              # optional unit before the range (Format B)
-        r"(?:Low|High|Borderline|Calculated)?\s*"  # optional qualifier (some CBC formats)
-        r"(\d+\.?\d*)\s*-\s*(\d+\.?\d*)",          # ref range: min - max
+        r"^(.+?)[ \t]+(\d+\.?\d*)[ \t]+"
+        r"\S+[ \t]+"                              # unit
+        r"(?:[A-Za-z][^\n:]*:[ \t]*)?"           # optional label e.g. "Adult Male :"
+        r"(\d+\.?\d*)[ \t]*-[ \t]*(\d+\.?\d*)",  # ref range
         re.MULTILINE
     )
 
@@ -125,7 +124,7 @@ def parse_text(text):
         re.MULTILINE
     )
 
-    # noise lines / section headers to skip
+    # stuff to skip
     skip_patterns = [
         r"^[A-Z][A-Z\s]{4,}$",   # all-caps strings ≥5 chars (section headers)
         r"^Calculated$",
@@ -161,4 +160,21 @@ def parse_text(text):
             continue
         report_readings[name] = (value, ref_min, ref_max)
 
+    below_pattern = re.compile(r"^(.+?)[ \t]+(\d+\.?\d*)[ \t]+\S+[ \t]+[Bb]elow[ \t]+(\d+\.?\d*)", re.MULTILINE)
+    
+    for match in below_pattern.finditer(text):
+        name    = match.group(1).strip()
+        value   = float(match.group(2))
+        ref_max = float(match.group(3))
+
+        if skip_regex.match(name):
+            continue
+        if name in report_readings:
+            continue
+        report_readings[name] = (value, 0.0, ref_max)
+
     return patient_info, report_readings
+
+loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
+loc2 = r"C:\Users\ayaan\Downloads\IRFAN_SHAIKH177496562.pdf"
+print(parse_text(check_n_extract(loc2)))
