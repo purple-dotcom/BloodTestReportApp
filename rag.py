@@ -1,3 +1,4 @@
+# from extractor import check_n_extract, parse_text
 def get_rag_status(report_readings):
     results = {}
     for name, (value, ref_min, ref_max) in report_readings.items():
@@ -17,3 +18,6 @@ def get_rag_status(report_readings):
             'status':  status
         }
     return results
+
+# loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
+# print(get_rag_status(parse_text(check_n_extract(loc))[1]))

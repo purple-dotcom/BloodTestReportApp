@@ -4,25 +4,27 @@ import pytesseract
 from datetime import datetime
 
 def check_n_extract(pdf_path):
-    text_found, image_found = False, False
     with pdfplumber.open(pdf_path) as pdf:
+        text_pages = []
         for page in pdf.pages:
             text = page.extract_text()
             if text and text.strip():
-                text_found = True
-            if page.images:
-                image_found = True
+                text_pages.append(text)
 
-        if text_found:   # ignore decorative images
-            txt = pdf.pages[0].extract_text()
-            #print(repr(txt))
-            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text() and page.extract_text().strip())
-        elif image_found:  # no text at all — actual scanned PDF
-            image = pdf.pages[0].to_image().original
-            return pytesseract.image_to_string(image)
-        else:
-            return "unknown"
+        if text_pages:
+            return '\n'.join(text_pages)
 
+        scanned_pages = []
+        for page in pdf.pages:
+            image_text = pytesseract.image_to_string(page.to_image().original)
+            if image_text and image_text.strip():
+                scanned_pages.append(image_text)
+
+        if scanned_pages:
+            return '\n'.join(scanned_pages)
+
+        return "unknown"
+    
 def parse_text(text):
     patient_info = {}
     report_readings = {}
@@ -175,6 +177,8 @@ def parse_text(text):
 
     return patient_info, report_readings
 
-loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
-loc2 = r"C:\Users\ayaan\Downloads\IRFAN_SHAIKH177496562.pdf"
-print(parse_text(check_n_extract(loc2)))
+# loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
+# loc2 = r"C:\Users\ayaan\Downloads\IRFAN_SHAIKH177496562.pdf"
+
+# if __name__ == '__main__':
+#     print(parse_text(check_n_extract(loc))[1])
