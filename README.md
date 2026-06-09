@@ -1,172 +1,185 @@
- # Blood Test Report Analyzer
+# BloodTestReportApp
 
-A web application that extracts data from CBC (Complete Blood Count) blood test reports and displays RAG (Red/Amber/Green) status for each reading based on standard reference ranges.
+A Flask web application that extracts blood test parameters from PDF or image reports and displays a RAG (Red / Amber / Green) status for each reading.
+
+Built as an internship project. Supports any standard lab report — not limited to CBC.
+
+---
 
 ## Features
 
-- Upload CBC reports as PDF or image (PNG, JPG, JPEG, WEBP)
-- Automatic extraction of patient info and test readings
-- RAG status per parameter based on patient sex
-- Supports multiple lab report formats
-- User accounts with secure login
-- Report history — view and delete past uploads
+- Upload blood test reports as PDF or image (PNG, JPG, JPEG, WEBP)
+- Extracts patient info: name, age, sex, lab name, report date
+- Extracts test parameters and reference ranges directly from the report
+- Computes RAG status with a 5% amber buffer on the reference range
+- Handles multi-page PDFs — all pages processed as one report
+- User authentication (signup, login, logout) with bcrypt password hashing
+- Per-user report history with view and delete
+
+---
+
+## RAG Logic
+
+Status is computed from the reference range printed on the report itself — no hardcoded ranges.
+
+| Status | Condition |
+|--------|-----------|
+| Green  | Value within reference range |
+| Amber  | Value within 5% of range width outside the boundary |
+| Red    | Value beyond the amber buffer |
+
+Buffer = `0.05 × (ref_max − ref_min)`
+
+### Supported reference range formats
+
+| Format | Example |
+|--------|---------|
+| `value unit min - max` | `82.34 mg/dl 70 - 110` |
+| `value unit label : min - max` | `15.9 g/dl Adult Male : 13.5 - 17.5 g/dl` |
+| `value unit Below max%` | `7.6 % Below 6.0%` (HbA1c style) — treated as range 0 to max |
+
+> **Known limitation:** Tests with tiered categorical ranges (e.g. Average Blood Glucose with Excellent / Good / Average tiers) are evaluated against the first (strictest) numeric range found on the line. This is noted behaviour, not a bug.
+
+---
 
 ## Tech Stack
 
-- **Backend:** Python, Flask
-- **Database:** PostgreSQL
-- **Libraries:** pdfplumber, pytesseract, psycopg2, bcrypt
-- **Frontend:** HTML, Jinja2, Bootstrap 5
+| Layer | Technology |
+|-------|------------|
+| Backend | Python, Flask |
+| Database | PostgreSQL via psycopg2 |
+| PDF extraction | pdfplumber |
+| OCR (scanned PDFs) | pytesseract |
+| Auth | bcrypt |
+| Frontend | Bootstrap 5, Jinja2 |
+
+---
 
 ## Project Structure
 
 ```
 BloodTestReportApp/
-├── app.py          # Flask routes
-├── extractor.py    # PDF/image text extraction and parsing
-├── rag.py          # RAG status logic
-├── db.py           # Database queries
-├── templates/      # HTML templates
-├── uploads/        # Temporary file storage (gitignored)
-├── requirements.txt
-├── packages.txt    # System dependencies for deployment
-└── .env            # Environment variables (gitignored)
+├── app.py            # Flask routes
+├── extractor.py      # PDF/image text extraction and parsing
+├── rag.py            # RAG status computation
+├── db.py             # PostgreSQL functions
+├── templates/
+│   ├── base.html
+│   ├── index.html
+│   ├── login.html
+│   ├── signup.html
+│   ├── dashboard.html
+│   └── report.html
+├── uploads/          # Temporary file storage (auto-deleted after processing)
+├── .env              # Environment variables (not committed)
+└── requirements.txt
 ```
 
-## Local Setup
+---
 
-**1. Clone the repo:**
+## Database Schema
+
+```sql
+CREATE TABLE users (
+    id            SERIAL PRIMARY KEY,
+    name          VARCHAR(100),
+    email         VARCHAR(100) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    is_active     BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE reports (
+    id            SERIAL PRIMARY KEY,
+    user_id       INT REFERENCES users(id),
+    patient_name  VARCHAR(100),
+    patient_age   INT,
+    patient_sex   VARCHAR(10),
+    lab_name      VARCHAR(100),
+    report_date   DATE,
+    uploaded_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE results (
+    id             SERIAL PRIMARY KEY,
+    report_id      INT REFERENCES reports(id) ON DELETE CASCADE,
+    parameter_name VARCHAR(150),
+    value          FLOAT,
+    ref_min        FLOAT,
+    ref_max        FLOAT,
+    rag_status     VARCHAR(10)
+);
+```
+
+---
+
+## Setup
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/purple-dotcom/BloodTestReportApp
 cd BloodTestReportApp
 ```
 
-**2. Create and activate virtual environment:**
+### 2. Create and activate a virtual environment
+
 ```bash
 python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate        # Windows
+source venv/bin/activate     # macOS / Linux
 ```
 
-**3. Install dependencies:**
+### 3. Install dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-**4. Install Tesseract** (for image-based reports):
-- Windows: https://github.com/UB-Mannheim/tesseract/wiki
-- Linux: `sudo apt-get install tesseract-ocr`
+### 4. Configure environment variables
 
-**5. Create `.env` file in project root:**
+Create a `.env` file in the project root:
+
 ```
+SECRET_KEY=your_secret_key_here
 DB_HOST=localhost
+DB_PORT=5432
 DB_NAME=your_db_name
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
-SECRET_KEY=your_secret_key
 ```
 
-**6. Set up the database:**
+### 5. Set up the database
 
-Run the following SQL to create tables:
+Connect to PostgreSQL and run the schema from the Database Schema section above.
 
-```sql
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    email VARCHAR(100) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### 6. Install Tesseract (for scanned PDF / image support)
 
-CREATE TABLE parameters (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    short_name VARCHAR(20),
-    unit VARCHAR(30),
-    ref_min_male FLOAT NOT NULL,
-    ref_max_male FLOAT NOT NULL,
-    ref_min_female FLOAT NOT NULL,
-    ref_max_female FLOAT NOT NULL
-);
+Download and install from https://github.com/UB-Mannheim/tesseract/wiki and ensure the binary is on your PATH.
 
-CREATE TABLE reports (
-    id SERIAL PRIMARY KEY,
-    user_id INT REFERENCES users(id),
-    patient_name VARCHAR(100),
-    patient_age INT,
-    patient_sex VARCHAR(10),
-    lab_name VARCHAR(100),
-    report_date DATE,
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+### 7. Run the app
 
-CREATE TABLE results (
-    id SERIAL PRIMARY KEY,
-    report_id INT REFERENCES reports(id) ON DELETE CASCADE,
-    parameter_id INT REFERENCES parameters(id),
-    value FLOAT,
-    rag_status VARCHAR(10)
-);
-```
-
-Then populate the parameters table:
-
-```sql
-INSERT INTO parameters (name, short_name, unit, ref_min_male, ref_max_male, ref_min_female, ref_max_female) VALUES
-('Hemoglobin', 'Hb', 'g/dL', 13.0, 17.0, 12.0, 16.0),
-('Total RBC Count', 'RBC', 'mill/cumm', 4.5, 5.5, 3.8, 4.8),
-('Packed Cell Volume', 'PCV', '%', 40, 50, 36, 46),
-('Mean Corpuscular Volume', 'MCV', 'fL', 83, 101, 83, 101),
-('MCH', 'MCH', 'pg', 27, 32, 27, 32),
-('MCHC', 'MCHC', 'g/dL', 32.5, 34.5, 32.5, 34.5),
-('RDW', 'RDW', '%', 11.6, 14.0, 11.6, 14.0),
-('Total WBC Count', 'WBC', 'cumm', 4000, 11000, 4000, 11000),
-('Neutrophils', 'NEUT', '%', 50, 62, 50, 62),
-('Lymphocytes', 'LYMPH', '%', 20, 40, 20, 40),
-('Eosinophils', 'EOS', '%', 0, 6, 0, 6),
-('Monocytes', 'MONO', '%', 0, 10, 0, 10),
-('Basophils', 'BASO', '%', 0, 2, 0, 2),
-('Platelet Count', 'PLT', 'cumm', 150000, 410000, 150000, 410000);
-```
-
-**7. Create uploads folder:**
-```bash
-mkdir uploads
-```
-
-**8. Run the app:**
 ```bash
 python app.py
 ```
 
-Visit `http://localhost:5000`
+Visit `http://127.0.0.1:5000`
 
-## RAG Logic
+---
 
-Each parameter is compared against sex-specific reference ranges:
+## How It Works
 
-- 🟢 **Green** — value within normal range
-- 🟡 **Amber** — value within 5% buffer outside range (borderline)
-- 🔴 **Red** — value significantly outside range
+1. User uploads a PDF or image
+2. `check_n_extract()` — if the PDF has extractable text, pdfplumber reads all pages and concatenates them; if it's a scanned image-only PDF, pytesseract OCRs the first page
+3. `parse_text()` — regex patterns extract patient info and test parameters with their reference ranges
+4. `get_rag_status()` — computes Green / Amber / Red for each parameter using the extracted ranges
+5. Results are saved to PostgreSQL and displayed on the report page
 
-## Supported Report Formats
+---
 
-The extractor handles varying lab formats including different field labels (Sex/Gender, Age/Age+Gender combined), different date formats, and both text-based and scanned PDFs.
+## Limitations
 
-## Deployment
-
-Deployed on Render. Requires the following environment variables set on the hosting platform:
-
-```
-DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD, SECRET_KEY
-```
-
-System dependency for Tesseract is handled via `packages.txt`.
-
-## Known Limitations
-
-- Reference ranges are for adults only — paediatric ranges not supported
-- Parser accuracy varies across lab formats — tested on Drlogy and Flabs report formats
-- Free tier database on Render expires after 90 days
+- OCR quality depends on scan resolution; low-quality scans may miss parameters
+- Categorical reference ranges (HbA1c, ABG tiers) are approximated using the first numeric range found
+- Lab name extraction requires the word "Lab", "Laboratory", "Pathology", or "Diagnostics" to appear in the report header
+- OCR quality depends on scan resolution; low-quality scans may produce incomplete extraction across any page
