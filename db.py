@@ -87,12 +87,28 @@ def delete_report(report_id):
     cursor.close()
     con.close()
 
+def get_parameter_range(name, sex, age):
+    con = get_connection()
+    cursor = con.cursor()
+    cursor.execute("""
+        SELECT ref_min, ref_max, amber_low, amber_high
+        FROM parameters
+        WHERE LOWER(name) = LOWER(%s)
+          AND (sex = %s OR sex = 'Any')
+          AND age_min <= %s AND age_max >= %s
+        ORDER BY
+            CASE WHEN sex = %s THEN 0 ELSE 1 END,
+            (age_max - age_min) ASC
+        LIMIT 1
+    """, (name, sex, age or 0, age or 0, sex))
+    result = cursor.fetchone()
+    cursor.close()
+    con.close()
+    return result
+
 #RESULT
 
 def save_results(report_id, rag_results):
-    # { parameter_name: { 'value', 'ref_min', 'ref_max', 'status' } }
-
-    # stores everything directly — no join to a parameters lookup table needed
     con = get_connection()
     cursor = con.cursor()
     for name, data in rag_results.items():
@@ -102,9 +118,6 @@ def save_results(report_id, rag_results):
     con.close()
 
 def get_results_by_report(report_id):
-    
-# Returns list of tuples: (parameter_name, value, ref_min, ref_max, rag_status)
-# Template accesses these as result[0] through result[4].
     con = get_connection()
     cursor = con.cursor()
     cursor.execute("SELECT parameter_name, value, ref_min, ref_max, rag_status FROM results WHERE report_id = %s ORDER BY id", (report_id,))

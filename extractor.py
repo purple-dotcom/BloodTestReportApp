@@ -26,8 +26,7 @@ def check_n_extract(pdf_path):
         return "unknown"
     
 def parse_text(text):
-    # 1. normalise comma-formatted numbers before any regex runs
-    text = re.sub(r'(\d),(\d)', r'\1\2', text)  # 5,100 → 5100, 4,800 → 4800
+    text = re.sub(r'(\d),(\d)', r'\1\2', text)
     patient_info = {}
     report_readings = {}
 
@@ -67,7 +66,6 @@ def parse_text(text):
     elif age_sex_match:
         patient_info["sex"] = 'Male' if age_sex_match.group(2).upper() == 'M' else 'Female'
 
-    # name_match3 ("Patient Name : MR. IRFAN SHAIKH") must come before the generic name_match2 ("Name : ..."), otherwise name_match2 fires first and captures the title prefix as part of the name
     if name_match:
         patient_info["name"] = name_match.group(1)
     elif name_match3:
@@ -94,10 +92,6 @@ def parse_text(text):
             patient_info["report_date"] = None
     else:
         patient_info["report_date"] = None
-
-    # --- parameter patterns ---
-    #
-    # report_readings stores: { parameter_name: (value, ref_min, ref_max) }
 
     param_pattern = re.compile(
         r"^(.+?)[ \t]+(\d+\.?\d*)[ \t]+"
@@ -134,26 +128,22 @@ def parse_text(text):
         name = re.sub(r'[\s,_=]+$', '', name) 
         name = re.sub(r'\s+[A-Z]$', '', name)
         value   = float(match.group(2))
-        ref_min = float(match.group(3))
-        ref_max = float(match.group(4))
 
         if skip_regex.match(name):
             continue
-        report_readings[name] = (value, ref_min, ref_max)
+        report_readings[name] = value
 
     for match in multiline_param_pattern.finditer(text):
         name    = match.group(1).strip()
         name = re.sub(r'[\s,_=]+$', '', name)
         name = re.sub(r'\s+[A-Z]$', '', name)
         value   = float(match.group(2))
-        ref_min = float(match.group(3))
-        ref_max = float(match.group(4))
 
         if skip_regex.match(name):
             continue
-        if name in report_readings:   # already captured by single-line pattern
+        if name in report_readings:   # already captured by single line pattern
             continue
-        report_readings[name] = (value, ref_min, ref_max)
+        report_readings[name] = value
 
     below_pattern = re.compile(r"^(.+?)[ \t]+(\d+\.?\d*)[ \t]+\S+[ \t]+[Bb]elow[ \t]+(\d+\.?\d*)", re.MULTILINE)
     upper_bound_pattern = re.compile(r"^(.+?)[ \t]+(\d+\.?\d*)[ \t]+\S+[ \t]+<[ \t]*(\d+\.?\d*)", re.MULTILINE)
@@ -163,31 +153,89 @@ def parse_text(text):
         name = re.sub(r'[\s,_=]+$', '', name)
         name = re.sub(r'\s+[A-Z]$', '', name)
         value   = float(match.group(2))
-        ref_max = float(match.group(3))
 
         if skip_regex.match(name):
             continue
         if name in report_readings:
             continue
-        report_readings[name] = (value, 0.0, ref_max)
+        report_readings[name] = value
 
     for match in upper_bound_pattern.finditer(text):
         name = match.group(1).strip()
         name = re.sub(r'[\s,_=]+$', '', name)
         name = re.sub(r'\s+[A-Z]$', '', name)
         value = float(match.group(2))
-        ref_max = float(match.group(3))
 
         if skip_regex.match(name):
             continue
         if name in report_readings:
             continue
-        report_readings[name] = (value, 0.0, ref_max)
+        report_readings[name] = value
 
     return patient_info, report_readings
 
-# loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
-# loc2 = r"C:\Users\ayaan\Downloads\IRFAN_SHAIKH177496562.pdf"
+name_aliases = {
+    'hemoglobin': 'Hemoglobin',
+    'haemoglobin': 'Hemoglobin',
+    'hgb': 'Hemoglobin',
+    'hb': 'Hemoglobin',
+    'total leukocyte count': 'WBC',
+    'tlc': 'WBC',
+    'tlc (total leucocyte count)': 'WBC',
+    'wbc': 'WBC',
+    'neutrophils': 'Neutrophils',
+    'neutrophil': 'Neutrophils',
+    'lymphocytes': 'Lymphocytes',
+    'lymphocyte': 'Lymphocytes',
+    'monocytes': 'Monocytes',
+    'monocyte': 'Monocytes',
+    'eosinophils': 'Eosinophils',
+    'eosinophil': 'Eosinophils',
+    'basophils': 'Basophils',
+    'basophil': 'Basophils',
+    'platelet count': 'Platelets',
+    'plt': 'Platelets',
+    'total rbc count': 'RBC',
+    'rbc': 'RBC',
+    'hematocrit value, hct': 'HCT',
+    'hematocrit value': 'HCT',
+    'hct': 'HCT',
+    'pcv': 'HCT',
+    'mean corpuscular volume, mcv': 'MCV',
+    'mean corpuscular volume': 'MCV',
+    'mcv': 'MCV',
+    'mean cell haemoglobin, mch': 'MCH',
+    'mean cell haemoglobin': 'MCH',
+    'mch': 'MCH',
+    'mean cell haemoglobin con, mchc': 'MCHC',
+    'mean cell haemoglobin con': 'MCHC',
+    'mchc': 'MCHC',
+    'pdw': 'PDW',
+    'mpv': 'MPV',
+    'rdw-cv': 'RDW-CV',
+    'rdw': 'RDW-CV',
+    'glucose fasting (plasma)': 'Glucose Fasting',
+    'glucose fasting': 'Glucose Fasting',
+    'fasting blood glucose': 'Glucose Fasting',
+    'glucose random': 'Glucose Random',
+    'glucose pp (plasma)': 'Glucose PP',
+    'glucose pp': 'Glucose PP',
+    'hba1c': 'HbA1c',
+    'glycosylated haemoglobin': 'HbA1c',
+    'average blood glucose (abg)': 'Average Blood Glucose',
+    'average blood glucose': 'Average Blood Glucose',
+    'total bilirubin': 'Total Bilirubin',
+    'conjugated bilirubin': 'Conjugated Bilirubin',
+    'unconjugated bilirubin(indirect)': 'Unconjugated Bilirubin',
+    'unconjugated bilirubin': 'Unconjugated Bilirubin',
+    'total protein': 'Total Protein',
+    'albumin, serum': 'Albumin',
+    'albumin': 'Albumin',
+}
 
-# if __name__ == '__main__':
-#     print(parse_text(check_n_extract(loc))[1])
+def normalize_readings(readings):
+    normalized = {}
+    for name, value in readings.items():
+        canonical = name_aliases.get(name.strip().lower(), name.strip())
+        normalized[canonical] = value
+    return normalized

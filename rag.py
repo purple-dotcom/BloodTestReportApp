@@ -1,12 +1,17 @@
-# from extractor import check_n_extract, parse_text
-def get_rag_status(report_readings):
+from db import get_parameter_range
+
+def get_rag_status(readings, age, sex):
     results = {}
-    for name, (value, ref_min, ref_max) in report_readings.items():
-        buffer = 0.05 * (ref_max - ref_min)
+    for name, value in readings.items():
+        range_data = get_parameter_range(name, sex, age)
+        if range_data is None:
+            continue  # no hardcoded range for this parameter, skip it
+
+        ref_min, ref_max, amber_low, amber_high = range_data
 
         if ref_min <= value <= ref_max:
             status = 'Green'
-        elif (ref_min - buffer) <= value < ref_min or ref_max < value <= (ref_max + buffer):
+        elif (amber_low <= value < ref_min) or (ref_max < value <= amber_high):
             status = 'Amber'
         else:
             status = 'Red'
@@ -17,7 +22,5 @@ def get_rag_status(report_readings):
             'ref_max': ref_max,
             'status':  status
         }
-    return results
 
-# loc = r"C:\Users\ayaan\Downloads\IRFAN SHAIKH_1777724991000.pdf"
-# print(get_rag_status(parse_text(check_n_extract(loc))[1]))
+    return results

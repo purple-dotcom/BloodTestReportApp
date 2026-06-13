@@ -1,6 +1,6 @@
 # BloodTestReportApp
 
-A Flask web application that extracts blood test parameters from PDF or image reports and displays a RAG (Red / Amber / Green) status for each reading.
+A Flask web application that extracts blood test parameters from PDF or image reports and displays a RAG (Red / Amber / Green) status for each reading, evaluated against clinically validated reference ranges adjusted for the patient's age and sex.
 
 Built as an internship project. Supports any standard lab report — not limited to CBC.
 
@@ -10,8 +10,9 @@ Built as an internship project. Supports any standard lab report — not limited
 
 - Upload blood test reports as PDF or image (PNG, JPG, JPEG, WEBP)
 - Extracts patient info: name, age, sex, lab name, report date
-- Extracts test parameters and reference ranges directly from the report
-- Computes RAG status with a 5% amber buffer on the reference range
+- Extracts parameter names and values from the report
+- Normalises parameter names across lab formats to a canonical name (e.g. `HAEMOGLOBIN`, `Hb`, `HGB` → `Hemoglobin`)
+- Evaluates readings against hardcoded clinical reference ranges with explicit amber zones, adjusted for patient age and sex
 - Handles multi-page PDFs — all pages processed as one report
 - User authentication (signup, login, logout) with bcrypt password hashing
 - Per-user report history with view and delete
@@ -20,25 +21,28 @@ Built as an internship project. Supports any standard lab report — not limited
 
 ## RAG Logic
 
-Status is computed from the reference range printed on the report itself — no hardcoded ranges.
+Status is computed by looking up the parameter in a `parameters` table keyed by canonical name, sex, and age bracket. Each row stores an explicit Green zone and Amber zone — no blanket percentage buffer.
 
 | Status | Condition |
 |--------|-----------|
-| Green  | Value within reference range |
-| Amber  | Value within 5% of range width outside the boundary |
-| Red    | Value beyond the amber buffer |
+| Green  | `ref_min ≤ value ≤ ref_max` |
+| Amber  | `amber_low ≤ value < ref_min` or `ref_max < value ≤ amber_high` |
+| Red    | `value < amber_low` or `value > amber_high` |
 
-Buffer = `0.05 × (ref_max − ref_min)`
+The lookup prefers an exact sex match over `Any`, and a narrower age range over a wider one, so the most specific applicable row always wins.
 
-### Supported reference range formats
+---
 
-| Format | Example |
-|--------|---------|
-| `value unit min - max` | `82.34 mg/dl 70 - 110` |
-| `value unit label : min - max` | `15.9 g/dl Adult Male : 13.5 - 17.5 g/dl` |
-| `value unit Below max%` | `7.6 % Below 6.0%` (HbA1c style) — treated as range 0 to max |
+## Supported Parameters
 
-> **Known limitation:** Tests with tiered categorical ranges (e.g. Average Blood Glucose with Excellent / Good / Average tiers) are evaluated against the first (strictest) numeric range found on the line. This is noted behaviour, not a bug.
+| Category | Parameters |
+|----------|------------|
+| CBC | Hemoglobin, WBC, Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils, Platelets, RBC, HCT, MCV, MCH, MCHC, PDW, MPV, RDW-CV |
+| Glucose | Glucose Fasting, Glucose Random, Glucose PP |
+| Diabetes | HbA1c, Average Blood Glucose |
+| Liver Function | Total Bilirubin, Conjugated Bilirubin, Unconjugated Bilirubin, Total Protein, Albumin |
+
+Parameters not in this list are silently skipped — no RAG status is shown for them.
 
 ---
 
@@ -49,7 +53,7 @@ Buffer = `0.05 × (ref_max − ref_min)`
 | Backend | Python, Flask |
 | Database | PostgreSQL via psycopg2 |
 | PDF extraction | pdfplumber |
-| OCR (scanned PDFs) | pytesseract |
+| OCR (scanned PDFs / images) | pytesseract |
 | Auth | bcrypt |
 | Frontend | Bootstrap 5, Jinja2 |
 
@@ -59,10 +63,11 @@ Buffer = `0.05 × (ref_max − ref_min)`
 
 ```
 BloodTestReportApp/
-├── app.py            # Flask routes
-├── extractor.py      # PDF/image text extraction and parsing
-├── rag.py            # RAG status computation
-├── db.py             # PostgreSQL functions
+├── app.py                  # Flask routes
+├── extractor.py            # PDF/image extraction, parsing, name normalisation
+├── rag.py                  # RAG status computation
+├── db.py                   # PostgreSQL functions
+├── parameters_seed.sql     # Reference range data for the parameters table
 ├── templates/
 │   ├── base.html
 │   ├── index.html
@@ -70,8 +75,8 @@ BloodTestReportApp/
 │   ├── signup.html
 │   ├── dashboard.html
 │   └── report.html
-├── uploads/          # Temporary file storage (auto-deleted after processing)
-├── .env              # Environment variables (not committed)
+├── uploads/                # Temporary file storage (auto-deleted after processing)
+├── .env                    # Environment variables (not committed)
 └── requirements.txt
 ```
 
@@ -108,6 +113,18 @@ CREATE TABLE results (
     ref_min        FLOAT,
     ref_max        FLOAT,
     rag_status     VARCHAR(10)
+);
+
+CREATE TABLE parameters (
+    id         SERIAL PRIMARY KEY,
+    name       VARCHAR(150),
+    sex        VARCHAR(10),    -- 'Male', 'Female', or 'Any'
+    age_min    INT DEFAULT 0,
+    age_max    INT DEFAULT 999,
+    ref_min    FLOAT,
+    ref_max    FLOAT,
+    amber_low  FLOAT,
+    amber_high FLOAT
 );
 ```
 
@@ -151,7 +168,11 @@ DB_PASSWORD=your_db_password
 
 ### 5. Set up the database
 
-Connect to PostgreSQL and run the schema from the Database Schema section above.
+Connect to PostgreSQL, run the schema above, then seed the parameters table:
+
+```bash
+psql -U your_db_user -d your_db_name -f parameters_seed.sql
+```
 
 ### 6. Install Tesseract (for scanned PDF / image support)
 
@@ -170,16 +191,18 @@ Visit `http://127.0.0.1:5000`
 ## How It Works
 
 1. User uploads a PDF or image
-2. `check_n_extract()` — if the PDF has extractable text, pdfplumber reads all pages and concatenates them; if it's a scanned image-only PDF, pytesseract OCRs the first page
-3. `parse_text()` — regex patterns extract patient info and test parameters with their reference ranges
-4. `get_rag_status()` — computes Green / Amber / Red for each parameter using the extracted ranges
-5. Results are saved to PostgreSQL and displayed on the report page
+2. `check_n_extract()` — pdfplumber reads all pages of text-based PDFs; pytesseract OCRs all pages of scanned PDFs or direct image uploads
+3. `parse_text()` — regex patterns extract patient demographics and parameter name + value pairs from the raw text
+4. `normalize_readings()` — maps raw PDF names to canonical names so they match the parameters table (e.g. `TOTAL LEUKOCYTE COUNT` → `WBC`)
+5. `get_rag_status()` — looks up each canonical name in the parameters table using the patient's age and sex, then computes Green / Amber / Red against the stored boundaries
+6. Results are saved to PostgreSQL and displayed on the report page
 
 ---
 
 ## Limitations
 
-- OCR quality depends on scan resolution; low-quality scans may miss parameters
-- Categorical reference ranges (HbA1c, ABG tiers) are approximated using the first numeric range found
+- Only parameters listed in the `parameters` table receive a RAG status; anything else is skipped
+- Platelets are stored in lakhs/cumm (standard in Indian labs); reports using 10³/μL will produce incorrect results
+- OCR quality depends on scan resolution — low-quality scans may misread values or miss parameters entirely
 - Lab name extraction requires the word "Lab", "Laboratory", "Pathology", or "Diagnostics" to appear in the report header
-- OCR quality depends on scan resolution; low-quality scans may produce incomplete extraction across any page
+- If age or sex cannot be extracted from the report, age defaults to 0 and sex defaults to Male for the range lookup

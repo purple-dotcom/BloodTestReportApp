@@ -1,6 +1,6 @@
 from flask import Flask, render_template, url_for, request, redirect, session
 import bcrypt
-from extractor import check_n_extract, parse_text
+from extractor import check_n_extract, parse_text, normalize_readings
 from rag import get_rag_status
 from db import *
 import os
@@ -80,14 +80,17 @@ def upload():
 
     if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
         from PIL import Image
-        text = pytesseract.image_to_string(Image.open(filepath))
+        img = Image.open(filepath)
+        img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
+        text = pytesseract.image_to_string(img, config='--psm 6')
     else:
         text = check_n_extract(filepath)
 
     os.remove(filepath)
 
-    patient_info, report_readings = parse_text(text)
-    rag_results = get_rag_status(report_readings)
+    patient_info, raw_readings = parse_text(text)
+    report_readings = normalize_readings(raw_readings)
+    rag_results = get_rag_status(report_readings, patient_info.get('age'), patient_info.get('sex', 'Male'))
 
     if not rag_results:
         return render_template(
